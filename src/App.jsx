@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import App from './Landing.jsx'
 
 // ─── CRON NEXT-RUN ENGINE ────────────────────────────────────────────────────
 

@@ -1,5 +1,111 @@
 import { useState, useEffect } from "react";
 
+// ─── CRON NEXT-RUN ENGINE ────────────────────────────────────────────────────
+
+function matchesField(value, n, min, max) {
+  if (value === "*") return true;
+  if (value.startsWith("*/")) {
+    const step = parseInt(value.slice(2));
+    return (n - min) % step === 0;
+  }
+  if (value.includes("/")) {
+    const [range, step] = value.split("/");
+    const start = range === "*" ? min : parseInt(range.split("-")[0]);
+    return n >= start && (n - start) % parseInt(step) === 0;
+  }
+  if (value.includes("-")) {
+    const [a, b] = value.split("-");
+    return n >= parseInt(a) && n <= parseInt(b);
+  }
+  if (value.includes(",")) {
+    return value.split(",").map(Number).includes(n);
+  }
+  return parseInt(value) === n;
+}
+
+function getNextRuns(expr, count = 5) {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length !== 5) return [];
+  const [minF, hourF, domF, monF, dowF] = parts;
+
+  const runs = [];
+  const now = new Date();
+  const start = new Date(now);
+  start.setSeconds(0, 0);
+  start.setMinutes(start.getMinutes() + 1);
+
+  let d = new Date(start);
+  let iterations = 0;
+  const MAX = 500000;
+
+  while (runs.length < count && iterations < MAX) {
+    iterations++;
+    const mon = d.getMonth() + 1;
+    const dom = d.getDate();
+    const dow = d.getDay();
+    const hour = d.getHours();
+    const min = d.getMinutes();
+
+    if (!matchesField(monF, mon, 1, 12)) {
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      continue;
+    }
+    const dowOk = matchesField(dowF, dow, 0, 6);
+    const domOk = matchesField(domF, dom, 1, 31);
+    const dayOk = (domF === "*" && dowF === "*") ? true
+      : (domF !== "*" && dowF !== "*") ? (domOk || dowOk)
+      : domF !== "*" ? domOk : dowOk;
+
+    if (!dayOk) {
+      d.setDate(d.getDate() + 1);
+      d.setHours(0, 0, 0, 0);
+      continue;
+    }
+    if (!matchesField(hourF, hour, 0, 23)) {
+      d.setHours(d.getHours() + 1, 0, 0, 0);
+      continue;
+    }
+    if (!matchesField(minF, min, 0, 59)) {
+      d.setMinutes(d.getMinutes() + 1, 0, 0);
+      continue;
+    }
+    runs.push(new Date(d));
+    d.setMinutes(d.getMinutes() + 1, 0, 0);
+  }
+  return runs;
+}
+
+function formatRunDate(date) {
+  const now = new Date();
+  const diff = date - now;
+  const mins = Math.floor(diff / 60000);
+  const hours = Math.floor(mins / 60);
+  const days = Math.floor(hours / 24);
+
+  let relative = "";
+  if (mins < 60) relative = `in ${mins}m`;
+  else if (hours < 24) relative = `in ${hours}h ${mins % 60}m`;
+  else relative = `in ${days}d ${hours % 24}h`;
+
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  const day = dayNames[date.getDay()];
+  const month = monthNames[date.getMonth()];
+  const dom = date.getDate();
+  const h = date.getHours();
+  const m = String(date.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+
+  return {
+    full: `${day}, ${month} ${dom} at ${h12}:${m} ${ampm}`,
+    relative,
+  };
+}
+
 // ─── CRON PARSER ────────────────────────────────────────────────────────────
 
 function parseField(value, min, max, names = []) {
@@ -45,10 +151,7 @@ function explainCron(expr) {
     const month = parseField(monthRaw, 1, 12, MONTHS);
     const dow = parseField(dowRaw, 0, 6, DAYS);
 
-    // Build human sentence
     let when = "";
-
-    // Time
     if (minute.type === "any" && hour.type === "any") {
       when = "every minute";
     } else if (minute.type === "step" && hour.type === "any") {
@@ -69,26 +172,16 @@ function explainCron(expr) {
       when = `at minute ${minute.label} of ${describeHour(hourRaw)}`;
     }
 
-    // Day
     let dayDesc = "";
     const hasDom = domRaw !== "*";
     const hasDow = dowRaw !== "*";
+    if (!hasDom && !hasDow) dayDesc = "every day";
+    else if (hasDom && !hasDow) dayDesc = `on day ${dom.label} of the month`;
+    else if (!hasDom && hasDow) dayDesc = `on ${dow.label}`;
+    else dayDesc = `on day ${dom.label} of the month or on ${dow.label}`;
 
-    if (!hasDom && !hasDow) {
-      dayDesc = "every day";
-    } else if (hasDom && !hasDow) {
-      dayDesc = `on day ${dom.label} of the month`;
-    } else if (!hasDom && hasDow) {
-      dayDesc = `on ${dow.label}`;
-    } else {
-      dayDesc = `on day ${dom.label} of the month or on ${dow.label}`;
-    }
-
-    // Month
     let monthDesc = "";
-    if (monthRaw !== "*") {
-      monthDesc = ` in ${month.label}`;
-    }
+    if (monthRaw !== "*") monthDesc = ` in ${month.label}`;
 
     const sentence = capitalizeFirst(`${when}, ${dayDesc}${monthDesc}`);
 
@@ -122,7 +215,7 @@ function capitalizeFirst(str) {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-// ─── EXAMPLES ───────────────────────────────────────────────────────────────
+// ─── EXAMPLES ────────────────────────────────────────────────────────────────
 
 const EXAMPLES = [
   { expr: "0 9 * * 1-5", label: "Weekday mornings" },
@@ -138,13 +231,21 @@ const EXAMPLES = [
 export default function CronExplainer() {
   const [input, setInput] = useState("0 9 * * 1-5");
   const [result, setResult] = useState(null);
+  const [nextRuns, setNextRuns] = useState([]);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (input.trim()) {
-      setResult(explainCron(input));
+      const res = explainCron(input);
+      setResult(res);
+      if (!res.error) {
+        setNextRuns(getNextRuns(input));
+      } else {
+        setNextRuns([]);
+      }
     } else {
       setResult(null);
+      setNextRuns([]);
     }
   }, [input]);
 
@@ -163,7 +264,6 @@ export default function CronExplainer() {
     <div style={styles.root}>
       <style>{css}</style>
 
-      {/* Header */}
       <header style={styles.header}>
         <div style={styles.badge}>DEV TOOL</div>
         <h1 style={styles.title}>
@@ -172,8 +272,7 @@ export default function CronExplainer() {
         <p style={styles.subtitle}>Paste any cron expression. Get plain English, instantly.</p>
       </header>
 
-      {/* Input area */}
-      <div style={styles.inputCard} className="input-card">
+      <div style={styles.inputCard}>
         <div style={styles.fieldLabels}>
           {fieldLabels.map((label, i) => (
             <div key={i} style={{
@@ -182,8 +281,7 @@ export default function CronExplainer() {
             }}>{label}</div>
           ))}
         </div>
-
-        <div style={styles.inputRow}>
+        <div style={styles.inputRow} className="input-row">
           <span style={styles.prompt}>$</span>
           <input
             style={styles.input}
@@ -196,7 +294,6 @@ export default function CronExplainer() {
         </div>
       </div>
 
-      {/* Result */}
       <div style={styles.resultArea}>
         {result?.error && (
           <div style={styles.errorBox} className="fade-in">
@@ -209,13 +306,37 @@ export default function CronExplainer() {
           <div style={styles.sentenceBox} className="fade-in">
             <div style={styles.sentenceLabel}>RUNS</div>
             <div style={styles.sentence}>{result.sentence}</div>
-            <button style={{...styles.copyBtn, ...(copied ? styles.copiedBtn : {})}} onClick={copyResult} className="copy-btn">
+            <button
+              style={{ ...styles.copyBtn, ...(copied ? styles.copiedBtn : {}) }}
+              onClick={copyResult}
+              className="copy-btn"
+            >
               {copied ? "✓ COPIED" : "COPY"}
             </button>
           </div>
         )}
 
-        {/* Field breakdown */}
+        {nextRuns.length > 0 && (
+          <div style={styles.nextRunsBox} className="fade-in">
+            <div style={styles.nextRunsHeader}>
+              <span style={styles.nextRunsTitle}>NEXT 5 RUNS</span>
+              <span style={styles.nextRunsSubtitle}>based on your local time</span>
+            </div>
+            <div style={styles.nextRunsList}>
+              {nextRuns.map((date, i) => {
+                const { full, relative } = formatRunDate(date);
+                return (
+                  <div key={i} style={styles.nextRunRow} className="next-run-row">
+                    <div style={styles.nextRunIndex}>{String(i + 1).padStart(2, "0")}</div>
+                    <div style={styles.nextRunFull}>{full}</div>
+                    <div style={styles.nextRunRelative}>{relative}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {result?.fields && (
           <div style={styles.fields} className="fade-in">
             {result.fields.map((f, i) => (
@@ -230,7 +351,6 @@ export default function CronExplainer() {
         )}
       </div>
 
-      {/* Examples */}
       <div style={styles.examplesSection}>
         <div style={styles.examplesLabel}>QUICK EXAMPLES</div>
         <div style={styles.examples}>
@@ -248,7 +368,6 @@ export default function CronExplainer() {
         </div>
       </div>
 
-      {/* Field reference */}
       <div style={styles.reference}>
         <div style={styles.refTitle}>FIELD ORDER</div>
         <div style={styles.refRow}>
@@ -273,8 +392,6 @@ const styles = {
     fontFamily: "'IBM Plex Mono', 'Courier New', monospace",
     color: "#e0e0e0",
     padding: "0 0 60px 0",
-    position: "relative",
-    overflow: "hidden",
   },
   header: {
     textAlign: "center",
@@ -298,33 +415,11 @@ const styles = {
     color: "#ffffff",
     fontFamily: "'IBM Plex Mono', monospace",
   },
-  titleAccent: {
-    color: "#f0c040",
-  },
-  subtitle: {
-    fontSize: "14px",
-    color: "#666",
-    letterSpacing: "1px",
-    margin: 0,
-  },
-  inputCard: {
-    maxWidth: "680px",
-    margin: "40px auto 0",
-    padding: "0 20px",
-  },
-  fieldLabels: {
-    display: "flex",
-    gap: "0",
-    marginBottom: "8px",
-    paddingLeft: "28px",
-  },
-  fieldLabel: {
-    flex: 1,
-    fontSize: "10px",
-    letterSpacing: "2px",
-    textAlign: "center",
-    transition: "color 0.2s",
-  },
+  titleAccent: { color: "#f0c040" },
+  subtitle: { fontSize: "14px", color: "#666", letterSpacing: "1px", margin: 0 },
+  inputCard: { maxWidth: "680px", margin: "40px auto 0", padding: "0 20px" },
+  fieldLabels: { display: "flex", marginBottom: "8px", paddingLeft: "28px" },
+  fieldLabel: { flex: 1, fontSize: "10px", letterSpacing: "2px", textAlign: "center", transition: "color 0.2s" },
   inputRow: {
     display: "flex",
     alignItems: "center",
@@ -333,14 +428,8 @@ const styles = {
     borderRadius: "4px",
     padding: "16px 20px",
     gap: "14px",
-    transition: "border-color 0.2s",
   },
-  prompt: {
-    color: "#f0c040",
-    fontSize: "20px",
-    fontWeight: "bold",
-    userSelect: "none",
-  },
+  prompt: { color: "#f0c040", fontSize: "20px", fontWeight: "bold", userSelect: "none" },
   input: {
     background: "transparent",
     border: "none",
@@ -371,20 +460,8 @@ const styles = {
     gap: "16px",
     flexWrap: "wrap",
   },
-  sentenceLabel: {
-    fontSize: "10px",
-    letterSpacing: "3px",
-    color: "#f0c040",
-    marginTop: "4px",
-    flexShrink: 0,
-  },
-  sentence: {
-    fontSize: "clamp(15px, 2.5vw, 18px)",
-    color: "#ffffff",
-    lineHeight: "1.5",
-    flex: 1,
-    minWidth: "200px",
-  },
+  sentenceLabel: { fontSize: "10px", letterSpacing: "3px", color: "#f0c040", marginTop: "4px", flexShrink: 0 },
+  sentence: { fontSize: "clamp(15px, 2.5vw, 18px)", color: "#ffffff", lineHeight: "1.5", flex: 1, minWidth: "200px" },
   copyBtn: {
     background: "transparent",
     border: "1px solid #333",
@@ -397,12 +474,8 @@ const styles = {
     borderRadius: "2px",
     transition: "all 0.2s",
     flexShrink: 0,
-    marginTop: "2px",
   },
-  copiedBtn: {
-    borderColor: "#f0c040",
-    color: "#f0c040",
-  },
+  copiedBtn: { borderColor: "#f0c040", color: "#f0c040" },
   errorBox: {
     background: "#160a0a",
     border: "1px solid #3a1010",
@@ -416,24 +489,43 @@ const styles = {
     fontSize: "14px",
   },
   errorIcon: {
-    width: "20px",
-    height: "20px",
+    width: "20px", height: "20px",
     border: "1px solid #cc3333",
     borderRadius: "50%",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
     flexShrink: 0,
     textAlign: "center",
     lineHeight: "20px",
     fontSize: "12px",
   },
-  fields: {
+  nextRunsBox: {
     background: "#111",
-    border: "1px solid #1e1e1e",
+    border: "1px solid #2a2a2a",
+    borderLeft: "3px solid #2a6a2a",
     borderRadius: "4px",
     overflow: "hidden",
   },
+  nextRunsHeader: {
+    display: "flex",
+    alignItems: "baseline",
+    gap: "12px",
+    padding: "14px 20px 12px",
+    borderBottom: "1px solid #1a1a1a",
+  },
+  nextRunsTitle: { fontSize: "10px", letterSpacing: "3px", color: "#4caf50" },
+  nextRunsSubtitle: { fontSize: "11px", color: "#444" },
+  nextRunsList: { display: "flex", flexDirection: "column" },
+  nextRunRow: {
+    display: "flex",
+    alignItems: "center",
+    padding: "11px 20px",
+    borderBottom: "1px solid #161616",
+    gap: "16px",
+    transition: "background 0.15s",
+  },
+  nextRunIndex: { color: "#2a6a2a", fontSize: "11px", fontWeight: "bold", flexShrink: 0, width: "24px" },
+  nextRunFull: { color: "#ccc", fontSize: "13px", flex: 1 },
+  nextRunRelative: { color: "#4caf50", fontSize: "12px", flexShrink: 0, letterSpacing: "0.5px" },
+  fields: { background: "#111", border: "1px solid #1e1e1e", borderRadius: "4px", overflow: "hidden" },
   fieldRow: {
     display: "flex",
     alignItems: "center",
@@ -443,43 +535,13 @@ const styles = {
     fontSize: "13px",
     transition: "background 0.15s",
   },
-  fieldName: {
-    color: "#555",
-    width: "110px",
-    flexShrink: 0,
-    fontSize: "11px",
-    letterSpacing: "1px",
-  },
-  fieldValue: {
-    color: "#f0c040",
-    width: "60px",
-    flexShrink: 0,
-    fontWeight: "bold",
-  },
-  fieldArrow: {
-    color: "#333",
-    flexShrink: 0,
-  },
-  fieldParsed: {
-    color: "#ccc",
-    flex: 1,
-  },
-  examplesSection: {
-    maxWidth: "680px",
-    margin: "40px auto 0",
-    padding: "0 20px",
-  },
-  examplesLabel: {
-    fontSize: "10px",
-    letterSpacing: "3px",
-    color: "#444",
-    marginBottom: "14px",
-  },
-  examples: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
-    gap: "8px",
-  },
+  fieldName: { color: "#555", width: "110px", flexShrink: 0, fontSize: "11px", letterSpacing: "1px" },
+  fieldValue: { color: "#f0c040", width: "60px", flexShrink: 0, fontWeight: "bold" },
+  fieldArrow: { color: "#333", flexShrink: 0 },
+  fieldParsed: { color: "#ccc", flex: 1 },
+  examplesSection: { maxWidth: "680px", margin: "40px auto 0", padding: "0 20px" },
+  examplesLabel: { fontSize: "10px", letterSpacing: "3px", color: "#444", marginBottom: "14px" },
+  examples: { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "8px" },
   exampleBtn: {
     background: "#111",
     border: "1px solid #1e1e1e",
@@ -493,32 +555,11 @@ const styles = {
     transition: "all 0.15s",
     fontFamily: "inherit",
   },
-  exampleExpr: {
-    color: "#f0c040",
-    fontSize: "13px",
-    letterSpacing: "2px",
-  },
-  exampleLabel: {
-    color: "#555",
-    fontSize: "11px",
-    letterSpacing: "1px",
-  },
-  reference: {
-    maxWidth: "680px",
-    margin: "40px auto 0",
-    padding: "0 20px",
-  },
-  refTitle: {
-    fontSize: "10px",
-    letterSpacing: "3px",
-    color: "#444",
-    marginBottom: "12px",
-  },
-  refRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-  },
+  exampleExpr: { color: "#f0c040", fontSize: "13px", letterSpacing: "2px" },
+  exampleLabel: { color: "#555", fontSize: "11px", letterSpacing: "1px" },
+  reference: { maxWidth: "680px", margin: "40px auto 0", padding: "0 20px" },
+  refTitle: { fontSize: "10px", letterSpacing: "3px", color: "#444", marginBottom: "12px" },
+  refRow: { display: "flex", flexWrap: "wrap", gap: "8px" },
   refItem: {
     display: "flex",
     alignItems: "center",
@@ -529,14 +570,8 @@ const styles = {
     padding: "8px 12px",
     fontSize: "12px",
   },
-  refNum: {
-    color: "#f0c040",
-    fontWeight: "bold",
-    fontSize: "11px",
-  },
-  refText: {
-    color: "#555",
-  },
+  refNum: { color: "#f0c040", fontWeight: "bold", fontSize: "11px" },
+  refText: { color: "#555" },
 };
 
 const css = `
@@ -545,9 +580,7 @@ const css = `
   body { margin: 0; background: #0d0d0d; }
 
   .cron-input::placeholder { color: #333; letter-spacing: 8px; }
-  .cron-input:focus { outline: none; }
-  .input-card:focus-within .inputRow { border-color: #f0c040 !important; }
-
+  .input-row:focus-within { border-color: #f0c040 !important; }
   .copy-btn:hover { border-color: #f0c040 !important; color: #f0c040 !important; }
 
   .example-btn:hover {
@@ -559,9 +592,10 @@ const css = `
   .field-row:last-child { border-bottom: none !important; }
   .field-row:hover { background: #161616; }
 
-  .fade-in {
-    animation: fadeUp 0.25s ease forwards;
-  }
+  .next-run-row:last-child { border-bottom: none !important; }
+  .next-run-row:hover { background: #0f1a0f; }
+
+  .fade-in { animation: fadeUp 0.25s ease forwards; }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(8px); }

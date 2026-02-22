@@ -283,6 +283,7 @@ export default function Landing() {
       <nav style={{...L.nav, ...(scrolled ? L.navScrolled : {})}}>
         <div style={L.navLogo}>CRON<span style={L.navAccent}>.EXPLAIN</span></div>
         <div style={L.navLinks}>
+          <a href="/docs" style={L.navLink} className="nav-link"> Docs </a>
           <a href="https://github.com/mykelayo/cron-explainer" target="_blank" rel="noreferrer" style={L.navLink} className="nav-link">
             GitHub
           </a>

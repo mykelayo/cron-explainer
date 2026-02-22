@@ -42,7 +42,7 @@ cron-explainer/
 ├── src/
 │   ├── main.jsx            # Entry point
 │   ├── Landing.jsx         # Landing page + embedded tool
-│   ├── Doc.jsx             # API Documentation
+│   ├── Docs.jsx             # API Documentation
 │   └── App.jsx             # Standalone tool (legacy)
 ├── netlify.toml            # Redirects /api/* → /.netlify/functions/*
 ├── index.html

@@ -56,7 +56,6 @@ cron-explainer/
 ```bash
 # Clone the repo
 git clone https://github.com/mykelayo/cron-explainer.git
-git clone https://github.com/mykelayo/cron-explainer.git
 cd cron-explainer
 
 # Install dependencies

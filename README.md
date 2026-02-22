@@ -42,7 +42,7 @@ cron-explainer/
 ├── src/
 │   ├── main.jsx            # Entry point
 │   ├── Landing.jsx         # Landing page + embedded tool
-│   ├── Docs.jsx             # API Documentation
+│   ├── Docs.jsx            # API Documentation
 │   └── App.jsx             # Standalone tool (legacy)
 ├── netlify.toml            # Redirects /api/* → /.netlify/functions/*
 ├── index.html
@@ -55,6 +55,7 @@ cron-explainer/
 
 ```bash
 # Clone the repo
+git clone https://github.com/mykelayo/cron-explainer.git
 git clone https://github.com/mykelayo/cron-explainer.git
 cd cron-explainer
 

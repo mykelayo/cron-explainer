@@ -123,7 +123,7 @@ function parseField(value, min, max, names = []) {
     const [a, b] = value.split("-");
     const la = names[+a] || a;
     const lb = names[+b] || b;
-    return { type: "range", label: `${la} through ${lb}` };
+    return { type: "range", label: `${la} through ${lb}` };CRON.EXPLAIN
   }
   if (value.includes(",")) {
     const parts = value.split(",").map(v => names[+v] || v);

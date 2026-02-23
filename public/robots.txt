@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://timely-flan-0ca3c1.netlify.app/sitemap.xml
+Sitemap: https://cronexplain.netlify.app/sitemap.xml

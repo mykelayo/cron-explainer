@@ -107,7 +107,7 @@ Push any commit. Netlify builds and deploys automatically. The scheduled functio
 The email provider is controlled by a single line at the top of `check-schedules.js`:
 
 ```js
-const EMAIL_PROVIDER = "gmail"; // change to "resend" and redeploy
+const EMAIL_PROVIDER = "gmail"; // or change to "resend" if you want and redeploy
 ```
 
 Then swap the env vars:
@@ -183,23 +183,6 @@ The Scheduler lets anyone register a cron expression and receive an email alert 
 > ⚠ **Best-effort service.** Alerts may be delayed or missed due to infrastructure outages. Do not rely on this as your sole monitoring mechanism for production systems.
 
 ---
-
-## Customising
-
-### Change the domain
-
-Edit `src/config.js` — one file, updates everywhere:
-
-```js
-export const SITE_URL    = "https://yourcustomdomain.com";
-export const GITHUB_URL  = "https://github.com/you/your-repo";
-export const APP_NAME    = "CRON.EXPLAIN";
-export const APP_TAGLINE = "Stop Googling cron syntax.";
-```
-
-### Change the theme colours
-
-Edit the `DARK` and `LIGHT` objects in `src/theme.js`. Every page reads from these — change once, updates everywhere.
 
 ### Change the alert check frequency
 

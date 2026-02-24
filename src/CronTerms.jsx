@@ -140,7 +140,7 @@ export default function CronTerms() {
             <p style={styles.p}>Source code is MIT licensed at <a href={GITHUB_URL} target="_blank" rel="noreferrer" style={styles.link}>{GITHUB_URL.replace("https://","")}</a>.</p>
 
             <h3 style={styles.h3}>8. Contact</h3>
-            <p style={styles.p}>Questions or data deletion requests: <a href={GITHUB_URL} target="_blank" rel="noreferrer" style={styles.link}>open a GitHub issue</a>.</p>
+            <p style={styles.p}>Questions or data deletion requests: <a href={GITHUB_URL/issue} target="_blank" rel="noreferrer" style={styles.link}>open a GitHub issue</a>.</p>
           </section>
 
           <hr style={styles.rule} />

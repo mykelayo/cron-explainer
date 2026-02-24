@@ -1,3 +1,6 @@
+// src/main.jsx
+// ─── ONE PLACE TO CHANGE THE DOMAIN ─────────────────────────────────────────
+// All pages import from src/config.js (change SITE_URL there, not here.)
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route } from "react-router-dom";

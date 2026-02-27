@@ -2,8 +2,8 @@
 // Netlify Scheduled Function — runs every 10 minutes automatically.
 //
 // ─── SWITCH EMAIL PROVIDER HERE ───────────────────────────────────────────────
-//   "gmail"  → uses GMAIL_USER + GMAIL_PASS
-//   "resend" → uses RESEND_API_KEY + RESEND_FROM
+//   "gmail"  → uses GMAIL_USER + GMAIL_PASS  (no DNS needed, works on any subdomain)
+//   "resend" → uses RESEND_API_KEY + RESEND_FROM  (requires verified custom domain)
 const EMAIL_PROVIDER = "gmail";
 
 "use strict";
@@ -121,7 +121,7 @@ function buildEmailHtml(job, nextRun) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PROVIDER: GMAIL
 // Needs: GMAIL_USER, GMAIL_PASS (app password)
-// Works on: any domain
+// Works on: any domain, any Netlify subdomain — no DNS setup needed
 // ─────────────────────────────────────────────────────────────────────────────
 
 function createGmailTransporter() {
@@ -138,7 +138,7 @@ function createGmailTransporter() {
 async function sendViaGmail(transporter, job, nextRun) {
   const minsUntil = Math.round((nextRun - Date.now()) / 60000);
   // use safeSubjectPart to prevent header injection via a crafted job name
-  const subject = `⏰ "${safeSubjectPart(job.name)}" fires in ${minsUntil}min — ${job.cron}`;
+  const subject = `⏰ "${safeSubjectPart(job.name)}" fires in ${minsUntil}min: ${job.cron}`;
 
   await transporter.sendMail({
     from:    `"Cron.Explain" <${process.env.GMAIL_USER}>`,
@@ -151,13 +151,13 @@ async function sendViaGmail(transporter, job, nextRun) {
 // ─────────────────────────────────────────────────────────────────────────────
 // PROVIDER: RESEND
 // Needs: RESEND_API_KEY, RESEND_FROM (e.g. alerts@yourdomain.com)
-// Works on: custom domains only
+// Works on: custom domains only — add SPF/DKIM/DMARC records in DNS first
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function sendViaResend(job, nextRun) {
   const minsUntil = Math.round((nextRun - Date.now()) / 60000);
-  // use safeSubjectPart here too
-  const subject = `⏰ "${safeSubjectPart(job.name)}" fires in ${minsUntil}min — ${job.cron}`;
+  // FIX: use safeSubjectPart here too
+  const subject = `⏰ "${safeSubjectPart(job.name)}" fires in ${minsUntil}min: ${job.cron}`;
 
   const res = await fetch("https://api.resend.com/emails", {
     method:  "POST",

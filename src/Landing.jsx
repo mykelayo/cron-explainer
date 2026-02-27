@@ -1,8 +1,8 @@
 // src/Landing.jsx
 import { useState, useEffect, useRef } from "react";
-import { useTheme } from "./theme.js";          
+import { useTheme } from "./theme.js";       
 import ThemeNav, { themeCSS } from "./ThemeNav.jsx";
-import { GITHUB_URL } from "./config.js";
+import { GITHUB_URL, APP_NAME, AUTHOR, COPYRIGHT_YEAR } from "./config.js";
 
 // ─── CRON ENGINE ──────────────────────────────────────────────────────────────
 
@@ -81,6 +81,33 @@ function explainCron(expr) {
   } catch { return { error:"Could not parse." }; }
 }
 
+
+// ─── CLIPBOARD HELPERS ────────────────────────────────────────────────────────
+// navigator.clipboard is unavailable on HTTP and some mobile browsers.
+// execCommandCopy is the fallback.
+
+function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => execCommandCopy(text));
+  }
+  return execCommandCopy(text);
+}
+
+function execCommandCopy(text) {
+  try {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;";
+    document.body.appendChild(el);
+    el.focus(); el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    return Promise.resolve();
+  } catch {
+    return Promise.reject(new Error("Copy not supported in this browser."));
+  }
+}
+
 // ─── CRON TOOL ────────────────────────────────────────────────────────────────
 
 const EXAMPLES=[
@@ -122,7 +149,7 @@ function CronTool({ C }) {
           <span style={{fontSize:"9px",letterSpacing:"3px",color:A,flexShrink:0,marginTop:"3px"}}>RUNS</span>
           <span style={{fontSize:"clamp(13px,2vw,15px)",color:C.text,lineHeight:"1.6",flex:1,minWidth:"160px"}}>{result.sentence}</span>
           <button style={{background:"transparent",border:`1px solid ${C.border2}`,color:copied?A:C.textMuted,fontFamily:"inherit",fontSize:"10px",letterSpacing:"2px",padding:"4px 10px",cursor:"pointer",borderRadius:"2px",transition:"all 0.2s",flexShrink:0}}
-            onClick={()=>{navigator.clipboard.writeText(result.sentence);setCopied(true);setTimeout(()=>setCopied(false),1500)}} className="tool-copy">
+            onClick={()=>{copyToClipboard(result.sentence).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500)}).catch(()=>{})}} className="tool-copy">
             {copied?"✓":"COPY"}
           </button>
         </div>
@@ -148,7 +175,7 @@ function CronTool({ C }) {
             <div key={i} style={{display:"flex",alignItems:"center",padding:"9px 16px",borderBottom:i<4?`1px solid ${C.border}`:"none",gap:"12px",fontSize:"12px",flexWrap:"wrap"}}>
               <span style={{color:C.textMuted,width:"90px",flexShrink:0,fontSize:"10px",letterSpacing:"1px"}}>{f.name}</span>
               <span style={{color:A,width:"50px",flexShrink:0,fontWeight:"bold"}}>{f.value}</span>
-              <span style={{color:C.border2}}>→</span>
+              <span style={{color:C.textFaint}}>→</span>
               <span style={{color:C.textSub,flex:1}}>{f.parsed.label}</span>
             </div>
           ))}
@@ -212,7 +239,7 @@ export default function Landing() {
           </p>
           <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"10px", marginBottom:"48px" }}>
             <button style={{ background:C.accent, color:C.accentText, border:"none", padding:"14px 32px", fontSize:"13px", letterSpacing:"2px", fontFamily:"inherit", fontWeight:"700", cursor:"pointer", borderRadius:"3px", transition:"all 0.2s" }} onClick={scrollToTool} className="hero-cta">
-              Try it now — free
+              Try it now. Free.
             </button>
             <span style={{ fontSize:"11px", color:C.textMuted, letterSpacing:"1px" }}>No account. No install.</span>
           </div>
@@ -256,11 +283,11 @@ export default function Landing() {
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))", gap:"2px" }}>
             {[
               {n:"01",icon:"✦",title:"Plain English",desc:"Every cron expression decoded into a clear human-readable sentence. No more Stack Overflow."},
-              {n:"02",icon:"⊞",title:"Field Breakdown",desc:"See what each of the 5 fields means — minute, hour, day, month, weekday — individually."},
+              {n:"02",icon:"⊞",title:"Field Breakdown",desc:"See what each of the 5 fields means: minute, hour, day, month, weekday."},
               {n:"03",icon:"◷",title:"Next Run Times",desc:"The next 5 exact dates your cron job fires, in your local timezone."},
             ].map((f,i)=>(
               <div key={i} style={{ background:C.card, border:`1px solid ${C.border}`, padding:"28px 24px", transition:"all 0.2s" }} className="feature-card">
-                <div style={{ fontSize:"9px", letterSpacing:"2px", color:C.border2, marginBottom:"16px" }}>{f.n}</div>
+                <div style={{ fontSize:"9px", letterSpacing:"2px", color:C.textFaint, marginBottom:"16px" }}>{f.n}</div>
                 <div style={{ fontSize:"22px", color:C.accent, marginBottom:"12px" }}>{f.icon}</div>
                 <h3 style={{ fontSize:"16px", fontWeight:"700", color:C.text, margin:"0 0 10px" }}>{f.title}</h3>
                 <p style={{ fontSize:"13px", color:C.textSub, lineHeight:"1.8", margin:0 }}>{f.desc}</p>
@@ -281,7 +308,7 @@ export default function Landing() {
               <div style={{ display:"flex", gap:"5px" }}>
                 {["#ff5f57","#febc2e","#28c840"].map(c=><span key={c} style={{ width:"10px", height:"10px", borderRadius:"50%", background:c }}/>)}
               </div>
-              <span style={{ fontSize:"10px", color:C.textMuted, letterSpacing:"1px", flex:1, textAlign:"center" }}>cron.explain — live</span>
+              <span style={{ fontSize:"10px", color:C.textMuted, letterSpacing:"1px", flex:1, textAlign:"center" }}>cron.explain, live</span>
             </div>
             <div style={{ padding:"22px 18px" }}>
               <CronTool C={C} />
@@ -323,7 +350,7 @@ export default function Landing() {
             </a>
           ))}
         </div>
-        <div style={{ fontSize:"10px", color:C.textFaint, letterSpacing:"1px" }}>© 2026 Cron.Explain · MIT License</div>
+        <div style={{ fontSize:"10px", color:C.textFaint, letterSpacing:"1px" }}>{`© ${COPYRIGHT_YEAR} ${APP_NAME}. MIT License.`}</div>
       </footer>
     </div>
   );

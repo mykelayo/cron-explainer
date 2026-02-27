@@ -189,7 +189,7 @@ exports.handler = async function(event) {
     const { jobId, token } = body;
 
     if (!jobId || !token)      return err("jobId and token required.");
-    if (!validJobId(jobId))    return err("Invalid job ID format.");    // FIX: reject bad IDs before touching storage
+    if (!validJobId(jobId))    return err("Invalid job ID format.");    // reject bad IDs before touching storage
     if (typeof token !== "string" || token.length > 100) return err("Invalid token format.");
 
     let job;

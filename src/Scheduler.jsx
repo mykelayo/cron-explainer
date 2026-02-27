@@ -3,9 +3,34 @@ import { useState, useEffect } from "react";
 import { useTheme } from "./theme.js";
 import ThemeNav, { themeCSS } from "./ThemeNav.jsx";
 
+// ─── CLIPBOARD HELPERS ────────────────────────────────────────────────────────
+
+function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => execCommandCopy(text));
+  }
+  return execCommandCopy(text);
+}
+
+function execCommandCopy(text) {
+  try {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;";
+    document.body.appendChild(el);
+    el.focus(); el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    return Promise.resolve();
+  } catch {
+    return Promise.reject(new Error("Copy not supported."));
+  }
+}
+
+
 // ─── CRON UTILS ───────────────────────────────────────────────────────────────
 // matchesField handles: *, */n, n/step, a-b, a,b,c, and specific values.
-// Kept in sync with Landing.jsx, if one is updated, update the other.
+// Kept in sync with Landing.jsx — if you update one, update the other.
 
 function matchesField(value, n, min) {
   if (value === "*") return true;
@@ -39,7 +64,7 @@ function getNextRun(expr) {
 }
 
 function fmt(date) {
-  if (!date) return "—";
+  if (!date) return "N/A";
   const DN=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   const MN=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const h=date.getHours(), m=String(date.getMinutes()).padStart(2,"0");
@@ -116,8 +141,7 @@ export default function Scheduler() {
     finally { setLooking(false); setLookedUp(true); }
   }
 
-  // FIX: previously removed job from UI even if server returned 403 (wrong token).
-  // Now we only remove from UI when the server confirms deletion (res.ok).
+  // Remove job from UI when the server confirms deletion (res.ok).
   async function handleDelete(jobId, token) {
     if (!token.trim()) return;
     try {
@@ -152,11 +176,11 @@ export default function Scheduler() {
         <div style={s.header}>
           <div style={s.badge}>SCHEDULER</div>
           <h1 style={s.title}>Cron Job Alerts</h1>
-          <p style={s.subtitle}>Register any cron expression and get an email alert before it fires. Free, no account needed, just your email.</p>
+          <p style={s.subtitle}>Register any cron expression and get an email alert before it fires. Free, no account needed. Just your email..</p>
         </div>
 
         {/* Two-column grid — stacks to single column on mobile via .sch-grid media query
-            FIX: added className="sch-grid" so the CSS breakpoint in schedulerExtras actually fires */}
+            added className="sch-grid" so the CSS breakpoint in schedulerExtras actually fires */}
         <div style={s.grid} className="sch-grid">
 
           {/* ── CREATE ALERT ── */}
@@ -240,12 +264,12 @@ export default function Scheduler() {
                     You'll get an email at <strong>{email}</strong> {notify} minutes before <span style={{ color:C.accent }}>{cron}</span> fires.
                   </p>
                   <div style={s.tokenCard}>
-                    <div style={s.tokenLabel}>MANAGEMENT TOKEN — save this to delete the alert later</div>
+                    <div style={s.tokenLabel}>MANAGEMENT TOKEN. Save this to delete the alert later.</div>
                     <div style={s.tokenRow}>
                       <code style={s.tokenCode}>{result.token}</code>
                       <button
                         style={{ ...s.tokenCopy, ...(copiedToken ? { borderColor:C.accent, color:C.accent } : {}) }}
-                        onClick={()=>{ navigator.clipboard.writeText(result.token); setCopiedToken(true); setTimeout(()=>setCopiedToken(false),2000); }}
+                        onClick={()=>{ copyToClipboard(result.token).then(()=>{ setCopiedToken(true); setTimeout(()=>setCopiedToken(false),2000); }).catch(()=>{}); }}
                         className="copy-btn">
                         {copiedToken?"✓":"COPY"}
                       </button>

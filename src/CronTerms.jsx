@@ -2,14 +2,13 @@
 import { useEffect } from "react";
 import { useTheme } from "./theme.js";
 import ThemeNav, { themeCSS } from "./ThemeNav.jsx";
-import { SITE_URL, GITHUB_URL } from "./config.js";
+import { SITE_URL, GITHUB_URL, AUTHOR } from "./config.js";
 
 export default function CronTerms() {
   const { C } = useTheme();
   useEffect(() => window.scrollTo(0, 0), []);
 
   const styles = makeStyles(C);
-
   return (
     <div style={styles.root}>
       <style>{themeCSS(C)}{termsExtras(C)}</style>
@@ -27,7 +26,7 @@ export default function CronTerms() {
           <div style={styles.docHeader}>
             <div style={styles.badge}>LEGAL</div>
             <h1 style={styles.h1}>Privacy Policy &amp; Terms of Service</h1>
-            <p style={styles.meta}>Effective: February 23, 2026 · {SITE_URL.replace("https://","")} · Operator: mykelayo</p>
+            <p style={styles.meta}>Effective: February 23, 2026 · {SITE_URL.replace("https://","")} · Operator: {AUTHOR}</p>
           </div>
 
           <hr style={styles.rule} />
@@ -37,7 +36,7 @@ export default function CronTerms() {
             <h2 style={styles.h2}>Privacy Policy</h2>
 
             <h3 style={styles.h3}>1. What we collect</h3>
-            <p style={styles.p}>The cron explainer runs entirely in your browser, no data is sent when you use the decoder. The API and Scheduler involve the following:</p>
+            <p style={styles.p}>The cron explainer runs entirely in your browser. No data is sent when you use the decoder. The API and Scheduler involve the following:</p>
 
             <div style={styles.table}>
               {[
@@ -58,7 +57,7 @@ export default function CronTerms() {
             <h3 style={styles.h3}>2. Scheduler data</h3>
             <ul style={styles.ul}>
               <li>Your email and job data are stored on Netlify infrastructure.</li>
-              <li>Data is used solely to send scheduled email alerts — nothing else.</li>
+              <li>Data is used solely to send scheduled email alerts. Nothing else.</li>
               <li>You can delete any alert at any time using your management token. Deletion is instant and permanent.</li>
               <li>We do not sell, share, or use your email for any marketing.</li>
             </ul>
@@ -74,7 +73,7 @@ export default function CronTerms() {
             </ul>
 
             <h3 style={styles.h3}>4. Third-party services</h3>
-            {/* FIX: destructuring renamed from ([s,p,d]) to ([svc,purpose,data]) to avoid
+            {/* destructuring renamed from ([s,p,d]) to ([svc,purpose,data]) to avoid
                 shadowing the outer `styles` variable (previously `s`). */}
             <div style={styles.table}>
               {[
@@ -82,7 +81,7 @@ export default function CronTerms() {
                 ["Netlify Blobs",    "Scheduler job storage",    "Job data only"                 ],
                 ["Gmail / Resend",   "Email delivery",           "Email address + alert content" ],
                 ["Google Analytics", "Usage metrics (optional)", "Anonymous page views"          ],
-                ["Google AdSense",   "Advertising (if enabled)", "Cookie, IP — Google policy"   ],
+                ["Google AdSense",   "Advertising (if enabled)", "Cookie and IP, governed by Google policy"   ],
               ].map(([svc, purpose, data]) => (
                 <div key={svc} style={threeColRow(C)}>
                   <span style={{ ...threeColCell(C), fontWeight:"500" }}>{svc}</span>
@@ -131,7 +130,7 @@ export default function CronTerms() {
             </div>
 
             <h3 style={styles.h3}>5. No warranty</h3>
-            <p style={styles.p}>The Service is provided "as is" without warranty of any kind — no guarantee of availability, accuracy of the cron parser, or email delivery.</p>
+            <p style={styles.p}>The Service is provided "as is" without warranty of any kind, with no guarantee of availability, accuracy of the cron parser, or email delivery.</p>
 
             <h3 style={styles.h3}>6. Limitation of liability</h3>
             <p style={styles.p}>The operator is not liable for missed alerts, data loss, or any indirect damages arising from use of the Service.</p>

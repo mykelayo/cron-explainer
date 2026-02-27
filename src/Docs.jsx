@@ -4,6 +4,31 @@ import { useTheme } from "./theme.js";
 import ThemeNav, { themeCSS } from "./ThemeNav.jsx";
 import { SITE_URL, GITHUB_URL } from "./config.js";
 
+// ─── CLIPBOARD HELPERS ────────────────────────────────────────────────────────
+
+function copyToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text).catch(() => execCommandCopy(text));
+  }
+  return execCommandCopy(text);
+}
+
+function execCommandCopy(text) {
+  try {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0;";
+    document.body.appendChild(el);
+    el.focus(); el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+    return Promise.resolve();
+  } catch {
+    return Promise.reject(new Error("Copy not supported."));
+  }
+}
+
+
 // ─── CODE SAMPLES ─────────────────────────────────────────────────────────────
 
 const CODE = {
@@ -98,7 +123,7 @@ function Playground({ C }) {
       {result && (
         <div style={{ margin:"14px 18px", background:C.card, border:`1px solid ${C.border}`, borderLeft:`3px solid ${result.ok?"#4caf50":"#cc3333"}`, borderRadius:"3px", padding:"12px 14px" }}>
           <div style={{ fontSize:"9px", letterSpacing:"2px", color:result.ok?"#4caf50":"#cc5555", marginBottom:"8px" }}>{result.ok?"200 OK":"ERROR"}</div>
-          {/* FIX: overflow:auto so long JSON lines scroll instead of being clipped */}
+          {/* overflow:auto so long JSON lines scroll instead of being clipped */}
           <pre style={{ margin:0, fontSize:"11px", color:C.textSub, lineHeight:"1.6", overflowX:"auto", whiteSpace:"pre", WebkitOverflowScrolling:"touch" }}>
             {JSON.stringify(result.data, null, 2)}
           </pre>
@@ -116,14 +141,14 @@ function Playground({ C }) {
       </div>
 
       {/* Code block
-          FIX: outer div was overflow:"hidden" which clipped the inner pre's horizontal scroll.
+          outer div was overflow:"hidden" which clipped the inner pre's horizontal scroll.
                Changed to overflow:"auto" so wide code lines actually scroll. */}
       <div style={{ position:"relative", margin:"12px 18px 18px" }}>
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:"4px", padding:"16px 20px", overflow:"auto" }}>
           <pre style={{ margin:0, fontSize:"12px", color:C.textSub, lineHeight:"1.7", overflowX:"auto", whiteSpace:"pre", WebkitOverflowScrolling:"touch" }}>{code}</pre>
         </div>
         <button
-          onClick={()=>{navigator.clipboard.writeText(code);setCopied(true);setTimeout(()=>setCopied(false),1500);}}
+          onClick={()=>{copyToClipboard(code).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1500);}).catch(()=>{});}}
           style={{ position:"absolute", top:"10px", right:"10px", background:"transparent", border:`1px solid ${copied?C.accent:C.border2}`, color:copied?C.accent:C.textMuted, fontFamily:"inherit", fontSize:"10px", letterSpacing:"2px", padding:"4px 8px", cursor:"pointer", borderRadius:"2px", transition:"all 0.2s" }}
           className="copy-btn">
           {copied?"✓":"COPY"}
@@ -289,7 +314,7 @@ export default function Docs() {
           <section id="errors" style={{ maxWidth:"700px", marginBottom:"56px" }}>
             <h2 style={{ fontSize:"20px", fontWeight:"700", color:C.text, margin:"0 0 16px" }}>Errors</h2>
             <div style={{ border:`1px solid ${C.border}`, borderRadius:"4px", overflow:"hidden", marginBottom:"16px" }}>
-              {[["400","Missing or invalid cron expression"],["405","Wrong HTTP method — use POST"],["429","Rate limit exceeded (60 req/min)"],["500","Internal server error"]].map(([s,m])=>(
+              {[["400","Missing or invalid cron expression"],["405","Wrong HTTP method. Use POST."],["429","Rate limit exceeded (60 req/min)"],["500","Internal server error"]].map(([s,m])=>(
                 <div key={s} style={{ display:"flex", gap:"16px", padding:"12px 16px", borderBottom:`1px solid ${C.border}`, fontSize:"13px", flexWrap:"wrap" }}>
                   <span style={{ color:C.accent, width:"36px", flexShrink:0 }}>{s}</span>
                   <span style={{ color:C.textSub }}>{m}</span>

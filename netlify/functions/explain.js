@@ -1,22 +1,82 @@
 // netlify/functions/explain.js
 // POST /api/explain
 // Body: { "cron": "0 9 * * 1-5" }
+import { getStore } from "@netlify/blobs";
+
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+
+const MAX_CRON_LEN = 100;
+const MAX_BODY_BYTES = 4 * 1024; // 4 KB
+
+// Rate limit — 60 requests per IP per minute.
+// Uses Netlify Blobs as counter store (same approach as schedule-job.js).
+const RL_EXPLAIN_MAX = 60;
+const RL_WINDOW_SEC = 60;
+const RL_STORE_NAME = process.env.BLOB_STORE || "cron-jobs";
+
+function getClientIp(event) {
+  const ip = event.headers["client-ip"];
+  if (ip) return ip.trim();
+  return (event.headers["x-forwarded-for"] || "").split(",")[0].trim() || "unknown";
+}
+
+async function isRateLimited(event) {
+  const ip = getClientIp(event);
+  const safeIp = ip.replace(/[^a-zA-Z0-9.:_-]/g, "_").slice(0, 64);
+  const key = `rl-explain-${safeIp}`;
+  const now = Date.now();
+  const window = RL_WINDOW_SEC * 1000;
+  const store = getStore(RL_STORE_NAME);
+
+  try {
+    let entry = null;
+    try { entry = await store.get(key, { type: "json" }); } catch { }
+
+    if (!entry || now - entry.windowStart > window) {
+      await store.setJSON(key, { count: 1, windowStart: now });
+      return false;
+    }
+    if (entry.count >= RL_EXPLAIN_MAX) return true;
+    await store.setJSON(key, { count: entry.count + 1, windowStart: entry.windowStart });
+    return false;
+  } catch {
+    return false; // fail open
+  }
+}
 
 // ─── FIELD MATCHER ────────────────────────────────────────────────────────────
+// Added guards against step=0/NaN (which caused 500k-iteration
+// loops returning nothing) and comma lists with >60 items (which caused ~27s
+// CPU burn, confirmed DoS against the 10s Netlify timeout).
 
 function matchesField(value, n, min) {
   if (value === "*") return true;
-  if (value.startsWith("*/")) return (n - min) % parseInt(value.slice(2)) === 0;
-  if (value.includes("/")) {
-    const [range, step] = value.split("/");
-    const start = range === "*" ? min : parseInt(range.split("-")[0]);
-    return n >= start && (n - start) % parseInt(step) === 0;
+
+  if (value.startsWith("*/")) {
+    const step = parseInt(value.slice(2));
+    if (!step || step < 1) return false; // guard */0 and */NaN
+    return (n - min) % step === 0;
   }
+
+  if (value.includes("/")) {
+    const [range, stepStr] = value.split("/");
+    const step = parseInt(stepStr);
+    if (!step || step < 1) return false; // guard n/0 and n/NaN
+    const start = range === "*" ? min : parseInt(range.split("-")[0]);
+    return n >= start && (n - start) % step === 0;
+  }
+
   if (value.includes("-")) {
     const [a, b] = value.split("-");
     return n >= parseInt(a) && n <= parseInt(b);
   }
-  if (value.includes(",")) return value.split(",").map(Number).includes(n);
+
+  if (value.includes(",")) {
+    const items = value.split(",");
+    if (items.length > 60) return false; // guard 1000-item DoS list
+    return items.map(Number).includes(n);
+  }
+
   return parseInt(value) === n;
 }
 
@@ -44,7 +104,7 @@ function getNextRuns(expr, count = 5) {
     const domOk = matchesField(domF, dom, 1), dowOk = matchesField(dowF, dow, 0);
     const dayOk = domF === "*" && dowF === "*" ? true
       : domF !== "*" && dowF !== "*" ? (domOk || dowOk)
-      : domF !== "*" ? domOk : dowOk;
+        : domF !== "*" ? domOk : dowOk;
 
     if (!dayOk) { d.setDate(d.getDate() + 1); d.setHours(0, 0, 0, 0); continue; }
     if (!matchesField(hourF, hour, 0)) { d.setHours(d.getHours() + 1, 0, 0, 0); continue; }
@@ -82,9 +142,9 @@ function parseField(value, names = []) {
   return { type: "specific", label: names[n] !== undefined ? names[n] : value, raw: n };
 }
 
-const MONTHS = ["","January","February","March","April","May","June",
-  "July","August","September","October","November","December"];
-const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const MONTHS = ["", "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December"];
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 function explainCron(expr) {
   const parts = expr.trim().split(/\s+/);
@@ -94,10 +154,10 @@ function explainCron(expr) {
 
   try {
     const minute = parseField(minR);
-    const hour   = parseField(hourR);
-    const dom    = parseField(domR);
-    const month  = parseField(monR, MONTHS);
-    const dow    = parseField(dowR, DAYS);
+    const hour = parseField(hourR);
+    const dom = parseField(domR);
+    const month = parseField(monR, MONTHS);
+    const dow = parseField(dowR, DAYS);
 
     let when = "";
     if (minute.type === "any" && hour.type === "any") {
@@ -117,8 +177,8 @@ function explainCron(expr) {
     const hasDom = domR !== "*", hasDow = dowR !== "*";
     const dayDesc = !hasDom && !hasDow ? "every day"
       : hasDom && !hasDow ? `on day ${dom.label} of the month`
-      : !hasDom && hasDow ? `on ${dow.label}`
-      : `on day ${dom.label} or ${dow.label}`;
+        : !hasDom && hasDow ? `on ${dow.label}`
+          : `on day ${dom.label} or ${dow.label}`;
 
     const monthDesc = monR !== "*" ? ` in ${month.label}` : "";
     const explanation = (when.charAt(0).toUpperCase() + when.slice(1)) + `, ${dayDesc}${monthDesc}`;
@@ -126,11 +186,11 @@ function explainCron(expr) {
     return {
       explanation,
       fields: {
-        minute:     { raw: minR, parsed: minute.label },
-        hour:       { raw: hourR, parsed: hour.label },
+        minute: { raw: minR, parsed: minute.label },
+        hour: { raw: hourR, parsed: hour.label },
         dayOfMonth: { raw: domR, parsed: dom.label },
-        month:      { raw: monR, parsed: month.label },
-        dayOfWeek:  { raw: dowR, parsed: dow.label },
+        month: { raw: monR, parsed: month.label },
+        dayOfWeek: { raw: dowR, parsed: dow.label },
       }
     };
   } catch (e) {
@@ -141,7 +201,6 @@ function explainCron(expr) {
 // ─── HANDLER ──────────────────────────────────────────────────────────────────
 
 export const handler = async (event) => {
-  // CORS headers — allow any origin so devs can call this from anywhere
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -149,72 +208,69 @@ export const handler = async (event) => {
     "Content-Type": "application/json",
   };
 
-  // Handle preflight
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers, body: "" };
+  if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers, body: "" };
+  if (event.httpMethod !== "POST") {
+    return { statusCode: 405, headers, body: JSON.stringify({ error: "Method not allowed. Use POST." }) };
   }
 
-  // Only allow POST
-  if (event.httpMethod !== "POST") {
+  // body size guard before JSON.parse
+  if ((event.body || "").length > MAX_BODY_BYTES) {
+    return { statusCode: 413, headers, body: JSON.stringify({ error: "Request body too large." }) };
+  }
+
+  // IP rate limit — 60 req/min
+  if (await isRateLimited(event)) {
     return {
-      statusCode: 405,
-      headers,
-      body: JSON.stringify({ error: "Method not allowed. Use POST." }),
+      statusCode: 429,
+      headers: { ...headers, "Retry-After": String(RL_WINDOW_SEC) },
+      body: JSON.stringify({ error: `Rate limit exceeded. Max ${RL_EXPLAIN_MAX} requests per minute.` }),
     };
   }
 
-  // Parse body
   let body;
   try {
     body = JSON.parse(event.body);
   } catch {
-    return {
-      statusCode: 400,
-      headers,
-      body: JSON.stringify({ error: "Invalid JSON body." }),
-    };
+    return { statusCode: 400, headers, body: JSON.stringify({ error: "Invalid JSON body." }) };
   }
 
   const { cron } = body;
 
   if (!cron || typeof cron !== "string") {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: "Missing required field: cron (string)" }) };
+  }
+
+  // length gate BEFORE any parsing — blocks the confirmed DoS
+  if (cron.length > MAX_CRON_LEN) {
     return {
-      statusCode: 400,
-      headers,
-      body: JSON.stringify({ error: "Missing required field: cron (string)" }),
+      statusCode: 400, headers,
+      body: JSON.stringify({ error: `cron expression too long (max ${MAX_CRON_LEN} characters).` }),
     };
   }
 
   if (cron.trim().split(/\s+/).length !== 5) {
     return {
-      statusCode: 422,
-      headers,
+      statusCode: 422, headers,
       body: JSON.stringify({ error: "Invalid cron expression. Must have exactly 5 space-separated fields." }),
     };
   }
 
-  // Run parser
   const result = explainCron(cron);
-
   if (result.error) {
-    return {
-      statusCode: 422,
-      headers,
-      body: JSON.stringify({ error: result.error }),
-    };
+    return { statusCode: 422, headers, body: JSON.stringify({ error: result.error }) };
   }
 
-  // Compute next runs
   const nextRuns = getNextRuns(cron, 5);
 
+  // do not echo the raw user-supplied string back.
+  // Return only the parsed/normalised form.
   return {
     statusCode: 200,
     headers,
     body: JSON.stringify({
-      expression: cron.trim(),
       explanation: result.explanation,
       fields: result.fields,
-      nextRuns,         // ISO 8601 timestamps (UTC)
+      nextRuns,
     }),
   };
 };
